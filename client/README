@@ -1,0 +1,29 @@
+Erlang-Yubico
+
+Client implementing the Yubico Validation Protocol Version 2.0.
+
+Quick example :
+
+   1) get an API key and ID from
+
+         https://upgrade.yubico.com/getapikey/
+
+      say you got id "87" and secret "Wyhz6s2KQeipM6fxLc2nBHR5uNQ=".
+
+   2) run 'erlc *.erl; erl' to compile the client source and start
+      an Erlang shell.
+
+   3) Try to validate an OTP from your Yubikey :
+
+      Eshell V5.7.4  (abort with ^G)
+      1> yubico:simple_verify("vvvvvvcucrlcietctckflvnncdgckubflugerlnr", "87", "tXCs0HUt4IyRhQB8pn7oeO3o6RQ=", []).
+      {auth,ok}
+      2> 
+
+      Try to validate the SAME OTP again (supposed to fail, obviously)
+
+      2> yubico:simple_verify("vvvvvvcucrlcietctckflvnncdgckubflugerlnr", "87", "tXCs0HUt4IyRhQB8pn7oeO3o6RQ=", []).
+      {bad_auth,replayed_otp}
+      3> 
+
+See the documentation at the top of yubico.erl for more information.
