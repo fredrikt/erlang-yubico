@@ -8,7 +8,7 @@ Quick example :
 
          https://upgrade.yubico.com/getapikey/
 
-      say you got id "87" and secret "Wyhz6s2KQeipM6fxLc2nBHR5uNQ=".
+      say you got id "87" and secret "tXCs0HUt4IyRhQB8pn7oeO3o6RQ=".
 
    2) run 'erlc *.erl; erl' to compile the client source and start
       an Erlang shell.
