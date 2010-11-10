@@ -294,9 +294,9 @@ get_request_url(OTP, Id, APIkey, Nonce, Options) ->
     NoEmpty = [X || X <- [ReqTimestamp, ReqSyncLevel, ReqTimeout], X /= []],
 
     %% The mandatory parameters
-    L1 = ["otp=" ++ OTP,
-	  "id=" ++ Id,
-	  "nonce=" ++ Nonce
+    L1 = ["otp=" ++ edoc_lib:escape_uri(OTP),
+	  "id=" ++ edoc_lib:escape_uri(Id),
+	  "nonce=" ++ edoc_lib:escape_uri(Nonce)
 	 ] ++ NoEmpty,
     L2 = lists:sort(L1),	%% sorting required for signing
     L3 = sign_request(L2, APIkey, SignRequest),
@@ -309,7 +309,7 @@ get_request_url(OTP, Id, APIkey, Nonce, Options) ->
 		  ) -> [nonempty_string()].
 sign_request(In, APIkey, true) ->
     H = get_sha1_hmac(APIkey, In),
-    In ++ ["h=" ++ H];
+    In ++ ["h=" ++ edoc_lib:escape_uri(H)];
 sign_request(In, _APIkey, false) ->
     In.
 
@@ -538,7 +538,7 @@ get_request_url_test_() ->
     Options2 = [{sign_request, false}],
 
     [
-     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&h=uDJxAiMSUgbg6VLVeXlL5WU46ZY=",
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&h=uDJxAiMSUgbg6VLVeXlL5WU46ZY%3d",
 		  get_request_url(OTP, Id, APIkey, Nonce, Options1)
 		 ),
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
