@@ -55,6 +55,13 @@
         ]).
 
 %%--------------------------------------------------------------------
+%% Include files
+%%--------------------------------------------------------------------
+-ifdef(EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+%%--------------------------------------------------------------------
 %% Types
 %%--------------------------------------------------------------------
 
@@ -284,7 +291,7 @@ get_request_url(OTP, Id, APIkey, Nonce, Options) ->
     ReqSyncLevel = get_req_synclevel(Options),
     ReqTimeout = get_req_timeout(Options),
 
-    NoEmpty = [ReqTimestamp, ReqSyncLevel, ReqTimeout] -- [[]],
+    NoEmpty = [X || X <- [ReqTimestamp, ReqSyncLevel, ReqTimeout], X /= []],
 
     %% The mandatory parameters
     L1 = ["otp=" ++ OTP,
@@ -490,3 +497,53 @@ get_http_client(Options) ->
 	    %% Default is the bundled module using Erlang/OTP inets http client
 	    yubico_http_client
     end.
+
+
+%%====================================================================
+%% EUnit tests
+%%====================================================================
+-ifdef(EUNIT).
+
+get_options_test_() ->
+    Options = [{http_client, 'yubico_test'},
+	       {req_synclevel, "fast"},
+	       {sign_request, 'true'}
+	      ],
+    [
+     ?_assert(get_http_client(Options) =:= 'yubico_test'),
+     ?_assert(get_req_synclevel(Options) =:= "sl=fast"),
+     ?_assert(get_req_timeout(Options) =:= []),
+     ?_assert(get_sign_request(Options) =:= 'true'),
+     ?_assert(get_sign_request([]) =:= 'false')
+    ].
+
+
+get_nonce_test_() ->
+    OptionsLong  = [{req_nonce, lists:seq(1, 80)}],
+    OptionsShort = [{req_nonce, lists:seq(1, 8)}],
+    Options      = [{req_nonce, lists:seq(1, 18)}],
+
+    [
+     ?_assertException(error, nonce_too_long, get_nonce(OptionsLong)),
+     ?_assertException(error, nonce_too_short, get_nonce(OptionsShort)),
+     ?_assertEqual(lists:seq(1, 18), get_nonce(Options)),
+     ?_assertEqual(32, length(get_nonce([])))
+    ].
+
+get_request_url_test_() ->
+    OTP = "abc123",
+    Id  = "87",
+    APIkey = <<"veryrandom">>,
+    Nonce  = "aabbccddeeff",
+    Options1 = [{sign_request, true}],
+
+    [
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&h=uDJxAiMSUgbg6VLVeXlL5WU46ZY=",
+		  get_request_url(OTP, Id, APIkey, Nonce, Options1)
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
+		  get_request_url(OTP, Id, APIkey, Nonce, [])
+		 )
+    ].
+
+-endif.
