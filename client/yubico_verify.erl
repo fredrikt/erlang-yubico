@@ -415,8 +415,8 @@ get_sign_request(Options) ->
 	{value, {sign_request, Bool}} when is_boolean(Bool) ->
 	    Bool;
 	false ->
-	    %% Default is to not sign the requests
-	    false
+	    %% Default is to sign the requests
+	    true
     end.
 
 
@@ -466,14 +466,13 @@ get_req_synclevel(Options) ->
     case lists:keysearch(req_synclevel, 1, Options) of
 	{value, {req_synclevel, Int}} when is_integer(Int) ->
 	    lists:concat(["sl=", Int]);
-	{value, {req_synclevel, "fast"}} ->
+	{value, {req_synclevel, 'fast'}} ->
 	    "sl=fast";
-	{value, {req_synclevel, "secure"}} ->
+	{value, {req_synclevel, 'secure'}} ->
 	    "sl=secure";
 	false ->
 	    %% Default is the server defined level 'secure'
-	    %"sl=secure"
-	    []
+	    "sl=secure"
     end.
 
 -spec get_req_timeout(Options :: yubico:yubico_client_options()
