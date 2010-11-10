@@ -471,8 +471,8 @@ get_req_synclevel(Options) ->
 	{value, {req_synclevel, 'secure'}} ->
 	    "sl=secure";
 	false ->
-	    %% Default is the server defined level 'secure'
-	    "sl=secure"
+	    %% Default is to let the server decice
+	    []
     end.
 
 -spec get_req_timeout(Options :: yubico:yubico_client_options()
@@ -505,7 +505,7 @@ get_http_client(Options) ->
 
 get_options_test_() ->
     Options = [{http_client, 'yubico_test'},
-	       {req_synclevel, "fast"},
+	       {req_synclevel, 'fast'},
 	       {sign_request, 'true'}
 	      ],
     [
@@ -513,7 +513,7 @@ get_options_test_() ->
      ?_assert(get_req_synclevel(Options) =:= "sl=fast"),
      ?_assert(get_req_timeout(Options) =:= []),
      ?_assert(get_sign_request(Options) =:= 'true'),
-     ?_assert(get_sign_request([]) =:= 'false')
+     ?_assert(get_sign_request([]) =:= 'true')
     ].
 
 
@@ -535,13 +535,14 @@ get_request_url_test_() ->
     APIkey = <<"veryrandom">>,
     Nonce  = "aabbccddeeff",
     Options1 = [{sign_request, true}],
+    Options2 = [{sign_request, false}],
 
     [
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&h=uDJxAiMSUgbg6VLVeXlL5WU46ZY=",
 		  get_request_url(OTP, Id, APIkey, Nonce, Options1)
 		 ),
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
-		  get_request_url(OTP, Id, APIkey, Nonce, [])
+		  get_request_url(OTP, Id, APIkey, Nonce, Options2)
 		 )
     ].
 

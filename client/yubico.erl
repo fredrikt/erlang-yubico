@@ -48,7 +48,7 @@
 %%%
 %%%             {req_synclevel, integer() | 'fast' | 'secure'}
 %%%                 controls what "sl=" we should put in the request
-%%%                 default is to request 'secure'
+%%%                 default is to let the server decide completely
 %%%
 %%%             {req_timeout, integer()}
 %%%                 specify the server-to-server sync timeout
