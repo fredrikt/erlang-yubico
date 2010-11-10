@@ -23,11 +23,36 @@
 %%%
 %%%           Valid Options :
 %%%
-%%%             {logfun, Fun :: fun()}
+%%%             {logfun, fun()}
 %%%                 default is a quiet fun
 %%%
 %%%             {servers, [string()]}
 %%%                 default is to query the five YubiCloud servers
+%%%
+%%%             {sign_request, bool()}
+%%%                 sign request or not? optional in spec
+%%%                 default is to sign requests.
+%%%
+%%%             {http_client, Module :: atom()}
+%%%                 use Module to perform the actual requests
+%%%                 default is 'yubico_http_client'
+%%%
+%%%             {req_nonce, nonempty_string()}
+%%%                 nonce to use (must be 16..40 bytes)
+%%%                 default is to generate using crypto:rand_bytes()
+%%%
+%%%             {req_timestamp, bool()}
+%%%                 should we request timestamp and session counter
+%%%                 information in the response?
+%%%                 default is 'false'
+%%%
+%%%             {req_synclevel, integer() | 'fast' | 'secure'}
+%%%                 controls what "sl=" we should put in the request
+%%%                 default is to request 'secure'
+%%%
+%%%             {req_timeout, integer()}
+%%%                 specify the server-to-server sync timeout
+%%%                 default is to let servers decide
 %%%
 %%% @since    7 Nov 2010 by Fredrik Thulin <fredrik@thulin.net>
 %%% @end
