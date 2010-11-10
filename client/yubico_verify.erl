@@ -465,8 +465,7 @@ get_req_synclevel(Options) ->
 	    "sl=secure";
 	false ->
 	    %% Default is the server defined level 'secure'
-	    %"sl=secure"
-	    []
+	    "sl=secure"
     end.
 
 -spec get_req_timeout(Options :: yubico:yubico_client_options()
