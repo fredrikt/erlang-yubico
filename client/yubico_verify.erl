@@ -408,8 +408,8 @@ get_sign_request(Options) ->
 	{value, {sign_request, Bool}} when is_boolean(Bool) ->
 	    Bool;
 	false ->
-	    %% Default is to not sign the requests
-	    false
+	    %% Default is to sign the requests
+	    true
     end.
 
 
