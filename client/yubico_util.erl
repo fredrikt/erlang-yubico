@@ -17,7 +17,8 @@
 %% External exports
 %%--------------------------------------------------------------------
 -export([
-	 to_hex/1
+	 to_hex/1,
+	 get_sha1_hmac/3
 	]).
 
 
@@ -39,6 +40,27 @@ to_hex(In) ->
     [byte_to_hex(H) || H <- In].
 
 
+%%--------------------------------------------------------------------
+%% @doc     Get the HMAC-SHA1 signature of a piece of data.
+%%            Key    : yubico:apikey()
+%%            Data   : iolist()
+%%            LogFun : yubico_log:logfun()
+%%
+%%          Returns :
+%%
+%%            Base64 : string()
+%% @end
+%%--------------------------------------------------------------------
+-spec get_sha1_hmac(Key :: yubico:apikey(),
+		    Data :: iolist(),
+		    LogFun :: yubico_log:logfun()
+		   ) -> string().
+get_sha1_hmac(Key, Data, LogFun) when is_binary(Key) ->
+    MAC = crypto:sha_mac(Key, Data),
+    Res = base64:encode_to_string(MAC),
+    yubico_log:log(LogFun, debug, "Calculated SHA1 ~p from data ~p", [Res, Data]),
+    Res.
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -52,3 +74,4 @@ hex(N) when N < 10 ->
     $0 + N;
 hex(N) when N >= 10, N < 16 ->
     $a + (N - 10).
+
