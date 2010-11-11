@@ -166,7 +166,7 @@ http(OTP, Id, APIkey, Servers, WSURL, Timeout, Options, LogFun)
 		  LogFun :: yubico_log:logfun()
 		 ) -> ok.
 master_init(Parent, Nonce, OTP, Id, APIkey, Scheme, Servers, WSURL, Timeout, Options, LogFun) ->
-    Request = get_request_url(OTP, Id, APIkey, Nonce, Options),
+    Request = get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options),
 
     HttpClientMod = get_http_client(Options),
 
@@ -193,7 +193,7 @@ master_init(Parent, Nonce, OTP, Id, APIkey, Scheme, Servers, WSURL, Timeout, Opt
 	     end,
     Workers = [Worker(Server) || Server <- Servers],
 
-    yubico_log:log(LogFun, debug, "I'm coordinating responses to caller ~p from ~p ~p workers : ~p",
+    yubico_log:log(LogFun, debug, "I'm coordinating responses to caller ~p from ~p ~p workers :~n~p",
 		   [Parent, length(Workers), Scheme, Workers]),
 
     master_wait_for_responses(Parent, Workers, LogFun).
@@ -281,9 +281,10 @@ worker_init(Master, HttpClientMod, Nonce, OTP, APIkey, Scheme, Server, WSURL, Re
 		      Id :: nonempty_string(),
 		      APIkey :: yubico:apikey(),
 		      Nonce :: nonempty_string(),
+		      LogFun :: yubico_log:logfun(),
 		      Options :: yubico:yubico_client_options()
 		     ) -> nonempty_string().
-get_request_url(OTP, Id, APIkey, Nonce, Options) ->
+get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options) ->
     SignRequest = get_sign_request(Options),
 
     %% Parameters in Validation Protocol Version 2.0
@@ -294,23 +295,24 @@ get_request_url(OTP, Id, APIkey, Nonce, Options) ->
     NoEmpty = [X || X <- [ReqTimestamp, ReqSyncLevel, ReqTimeout], X /= []],
 
     %% The mandatory parameters
-    L1 = ["otp=" ++ edoc_lib:escape_uri(OTP),
-	  "id=" ++ edoc_lib:escape_uri(Id),
-	  "nonce=" ++ edoc_lib:escape_uri(Nonce)
+    L1 = ["otp=" ++ OTP,
+	  "id=" ++ Id,
+	  "nonce=" ++ Nonce
 	 ] ++ NoEmpty,
     L2 = lists:sort(L1),	%% sorting required for signing
-    L3 = sign_request(L2, APIkey, SignRequest),
-    Str = string:join(L3, "&"),
+    L3 = string:join(L2, "&"),
+    Str = sign_request(L3, APIkey, LogFun, SignRequest),
     lists:flatten(Str).
 
 -spec sign_request(In :: [nonempty_string()],
 		   APIkey :: yubico:apikey(),
+		   LogFun :: yubico_log:logfun(),
 		   SignRequest :: boolean()
 		  ) -> [nonempty_string()].
-sign_request(In, APIkey, true) ->
-    H = get_sha1_hmac(APIkey, In),
-    In ++ ["h=" ++ edoc_lib:escape_uri(H)];
-sign_request(In, _APIkey, false) ->
+sign_request(In, APIkey, LogFun, true) ->
+    H = get_sha1_hmac(APIkey, In, LogFun),
+    In ++ ["&h=" ++ H];
+sign_request(In, _APIkey, _LogFun, false) ->
     In.
 
 -spec check_response(OTP :: nonempty_string(),
@@ -353,7 +355,7 @@ verify_authentic_response(OTP, APIkey, Nonce, Body, LogFun) ->
 	    %% Make key=value strings
 	    Data1 = [lists:concat([H, "=", V]) || {H, V} <- Params],
 	    Data2 = string:join(Data1, "&"),
-	    HMAC = get_sha1_hmac(APIkey, Data2),
+	    HMAC = get_sha1_hmac(APIkey, Data2, LogFun),
 
 	    case dict_has("h", HMAC, Body) of
 		true ->
@@ -379,11 +381,14 @@ dict_has(Key, Val, Dict) ->
     end.
 
 -spec get_sha1_hmac(Key :: yubico:apikey(),
-		    Data :: iolist()
+		    Data :: iolist(),
+		    LogFun :: yubico_log:logfun()
 		   ) -> string().
-get_sha1_hmac(Key, Data) ->
+get_sha1_hmac(Key, Data, LogFun) ->
     MAC = crypto:sha_mac(Key, Data),
-    base64:encode_to_string(MAC).
+    Res = base64:encode_to_string(MAC),
+    yubico_log:log(LogFun, debug, "Calculated SHA1 ~p from data ~p", [Res, Data]),
+    Res.
 
 -spec get_verification_status(Body :: dict()
 			     ) -> 'ok' | yubico_server_error_response() | 'unknown_result'.
