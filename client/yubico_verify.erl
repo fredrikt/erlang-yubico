@@ -286,34 +286,52 @@ worker_init(Master, HttpClientMod, Nonce, OTP, APIkey, Scheme, Server, WSURL, Re
 		     ) -> nonempty_string().
 get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options) ->
     SignRequest = get_sign_request(Options),
-
-    %% Parameters in Validation Protocol Version 2.0
     ReqTimestamp = get_req_timestamp(Options),
     ReqSyncLevel = get_req_synclevel(Options),
     ReqTimeout = get_req_timeout(Options),
 
-    NoEmpty = [X || X <- [ReqTimestamp, ReqSyncLevel, ReqTimeout], X /= []],
+    %% Parameters in Validation Protocol Version 2.0
+    Mandatory = [{"otp", OTP},
+		 {"id", Id},
+		 {"nonce", Nonce}
+		],
 
-    %% The mandatory parameters
-    L1 = ["otp=" ++ OTP,
-	  "id=" ++ Id,
-	  "nonce=" ++ Nonce
-	 ] ++ NoEmpty,
-    L2 = lists:sort(L1),	%% sorting required for signing
-    L3 = string:join(L2, "&"),
-    Str = sign_request(L3, APIkey, LogFun, SignRequest),
-    lists:flatten(Str).
+    Extra = [ReqTimestamp, ReqSyncLevel, ReqTimeout],
+
+    %% For signing, we need a list of the parameters non-escaped
+    UnescapedStr = get_param_str(Mandatory ++ Extra, false),
+    HMAC = sign_request(UnescapedStr, APIkey, LogFun, SignRequest),
+
+    %% The actual URI needs to be escaped
+    EscapedStr = get_param_str(Mandatory ++ Extra ++ HMAC, false),
+
+    lists:flatten(EscapedStr).
+
+get_param_str(In, Escape) ->
+    NoEmpty = [X || X <- In, X /= []],
+    L1 = get_param_str2(NoEmpty, Escape),
+    L2 = lists:sort(L1),	%% required for signing, good for consistency
+    string:join(L2, "&").
+
+get_param_str2([{Key, Value} | T], true) ->
+    [Key ++ "=" ++ edoc_lib:escape_uri(Value)] ++ get_param_str2(T, false);
+get_param_str2([{Key, Value} | T], false) ->
+    [Key ++ "=" ++ Value] ++ get_param_str2(T, false);
+get_param_str2([undefined | T], Escape) ->
+    get_param_str2(T, Escape);
+get_param_str2([], _Escape) ->
+    [].
 
 -spec sign_request(In :: [nonempty_string()],
 		   APIkey :: yubico:apikey(),
 		   LogFun :: yubico_log:logfun(),
 		   SignRequest :: boolean()
-		  ) -> [nonempty_string()].
+		  ) -> string().
 sign_request(In, APIkey, LogFun, true) ->
-    H = get_sha1_hmac(APIkey, In, LogFun),
-    In ++ ["&h=" ++ H];
-sign_request(In, _APIkey, _LogFun, false) ->
-    In.
+    HMAC = get_sha1_hmac(APIkey, In, LogFun),
+    [{"h", HMAC}];
+sign_request(_In, _APIkey, _LogFun, false) ->
+    [].
 
 -spec check_response(OTP :: nonempty_string(),
 		     APIkey :: yubico:apikey(),
@@ -384,7 +402,7 @@ dict_has(Key, Val, Dict) ->
 		    Data :: iolist(),
 		    LogFun :: yubico_log:logfun()
 		   ) -> string().
-get_sha1_hmac(Key, Data, LogFun) ->
+get_sha1_hmac(Key, Data, LogFun) when is_binary(Key) ->
     MAC = crypto:sha_mac(Key, Data),
     Res = base64:encode_to_string(MAC),
     yubico_log:log(LogFun, debug, "Calculated SHA1 ~p from data ~p", [Res, Data]),
@@ -454,41 +472,41 @@ get_nonce(Options) ->
     end.
 
 -spec get_req_timestamp(Options :: yubico:yubico_client_options()
-		       ) -> string().
+		       ) -> {Key :: string(), Value :: string()} | undefined.
 get_req_timestamp(Options) ->
     case lists:keysearch(req_timestamp, 1, Options) of
 	{value, {req_timestamp, true}} ->
-	    "timestamp=1";
+	    {"timestamp", "1"};
 	false ->
 	    %% Default is to not request timestamp and session counter information
 	    %% in the response
-	    []
+	    undefined
     end.
 
 -spec get_req_synclevel(Options :: yubico:yubico_client_options()
-		       ) -> string().
+		       ) -> {Key :: string(), Value :: string()} | undefined.
 get_req_synclevel(Options) ->
     case lists:keysearch(req_synclevel, 1, Options) of
 	{value, {req_synclevel, Int}} when is_integer(Int) ->
-	    lists:concat(["sl=", Int]);
+	    {"sl", integer_to_list(Int)};
 	{value, {req_synclevel, 'fast'}} ->
-	    "sl=fast";
+	    {"sl", "fast"};
 	{value, {req_synclevel, 'secure'}} ->
-	    "sl=secure";
+	    {"sl", "secure"};
 	false ->
 	    %% Default is to let the server decice
-	    []
+	    undefined
     end.
 
 -spec get_req_timeout(Options :: yubico:yubico_client_options()
-		     ) -> string().
+		     ) -> {Key :: string(), Value :: string()} | undefined.
 get_req_timeout(Options) ->
     case lists:keysearch(req_timeout, 1, Options) of
 	{value, {req_timeout, Int}} when is_integer(Int) ->
-	    lists:concat(["timeout=", Int]);
+	    {"timeout", integer_to_list(Int)};
 	false ->
 	    %% Default is to let the server decide the sync responses timeout
-	    []
+	    undefined
     end.
 
 -spec get_http_client(Options :: yubico:yubico_client_options()
@@ -515,8 +533,8 @@ get_options_test_() ->
 	      ],
     [
      ?_assert(get_http_client(Options) =:= 'yubico_test'),
-     ?_assert(get_req_synclevel(Options) =:= "sl=fast"),
-     ?_assert(get_req_timeout(Options) =:= []),
+     ?_assert(get_req_synclevel(Options) =:= {"sl", "fast"}),
+     ?_assert(get_req_timeout(Options) =:= undefined),
      ?_assert(get_sign_request(Options) =:= 'true'),
      ?_assert(get_sign_request([]) =:= 'true')
     ].
@@ -541,13 +559,14 @@ get_request_url_test_() ->
     Nonce  = "aabbccddeeff",
     Options1 = [{sign_request, true}],
     Options2 = [{sign_request, false}],
+    LogFun = yubico_log:fun_quiet(),
 
     [
-     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&h=uDJxAiMSUgbg6VLVeXlL5WU46ZY%3d",
-		  get_request_url(OTP, Id, APIkey, Nonce, Options1)
+     ?_assertEqual("h=7BqT4wsQk1SNgYu1YwtDizl1ciM=&id=87&nonce=aabbccddeeff&otp=abc123",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options1)
 		 ),
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
-		  get_request_url(OTP, Id, APIkey, Nonce, Options2)
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2)
 		 )
     ].
 
