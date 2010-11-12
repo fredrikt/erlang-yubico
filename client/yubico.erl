@@ -26,7 +26,7 @@
 %%%             {logfun, fun()}
 %%%                 default is a quiet fun
 %%%
-%%%             {servers, [string()]}
+%%%             {verify_servers, [string()]}
 %%%                 default is to query the five YubiCloud servers
 %%%
 %%%             {sign_request, bool()}
@@ -136,14 +136,15 @@ simple_verify(OTP, Id, APIkey, Options) when is_list(APIkey) ->
     simple_verify(OTP, Id, NewAPIkey, Options);
 simple_verify(OTP, Id, APIkey, Options) when is_list(OTP), is_list(Id), is_binary(APIkey), is_list(Options) ->
     LogFun = get_logfun(Options),
-    Servers = get_servers(Options),
+    Servers = get_verify_servers(Options),
     Timeout = get_timeout(Options),
+    WSURL = get_verify_wsurl(Options),
 
     yubico_verify:http(OTP,
 		       Id,
 		       APIkey,
 		       Servers,
-		       ?YUBICO_VERIFY_WSURL,
+		       WSURL,
 		       Timeout,
 		       Options,
 		       LogFun
@@ -165,9 +166,9 @@ get_logfun(Options) ->
 	    yubico_log:fun_quiet()
     end.
 
--spec get_servers(Options :: yubico_client_options()
-		 ) -> [nonempty_string()].
-get_servers(Options) ->
+-spec get_verify_servers(Options :: yubico_client_options()
+			) -> [nonempty_string()].
+get_verify_servers(Options) ->
     case lists:keysearch(verify_servers, 1, Options) of
 	{value, {verify_servers, L}} when is_list(L) ->
 	    L;
@@ -184,4 +185,15 @@ get_timeout(Options) ->
 	    Int;
 	false ->
 	    ?DEFAULT_TIMEOUT
+    end.
+
+-spec get_verify_wsurl(Options :: yubico_client_options()
+		      ) -> [nonempty_string()].
+get_verify_wsurl(Options) ->
+    case lists:keysearch(verify_wsurl, 1, Options) of
+	{value, {verify_wsurl, L}} when is_list(L) ->
+	    L;
+	false ->
+	    %% Default is to query all public YubiCloud servers
+	    ?YUBICO_VERIFY_WSURL
     end.
