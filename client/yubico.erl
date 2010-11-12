@@ -68,7 +68,8 @@
 %% External exports
 %%--------------------------------------------------------------------
 -export([
-	 simple_verify/4
+	 simple_verify/4,
+	 yubikey_id/1
 	]).
 
 %%--------------------------------------------------------------------
@@ -149,6 +150,34 @@ simple_verify(OTP, Id, APIkey, Options) when is_list(OTP), is_list(Id), is_binar
 		       Options,
 		       LogFun
 		      ).
+
+%%--------------------------------------------------------------------
+%% @doc     Get the static Yubikey ID from an OTP string.
+%%
+%%            OTP: the string outputed by your YubiKey (without
+%%            the ending "\n").
+%%
+%%          Returns :
+%%
+%%            KeyId :: string() if OTP contains a key id
+%%            none
+%% @end
+%%--------------------------------------------------------------------
+-spec yubikey_id(OTP :: nonempty_string()) -> string() | none.
+yubikey_id(OTP) when is_list(OTP) ->
+    %% The OTP part of the OTP is the last 32 bytes. The yubikey ID is
+    %% whatever appears before the OTP part (_can_ be programmed to be
+    %% 0 bytes).
+    KeyLen = length(OTP) - 32,
+    if
+	KeyLen > 0 ->
+	    string:substr(OTP, 1, KeyLen);
+	KeyLen < 0 ->
+	    %% OTP is not at least 32 bytes, can't be from a Yubikey
+	    erlang:error(bad_otp);
+	true ->
+	    none
+    end.
 
 
 %%====================================================================
