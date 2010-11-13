@@ -280,7 +280,7 @@ get_param_str(In, Escape) ->
     string:join(L2, "&").
 
 get_param_str2([{Key, Value} | T], true) when is_list(Value) ->
-    [Key ++ "=" ++ edoc_lib:escape_uri(Value)] ++ get_param_str2(T, false);
+    [Key ++ "=" ++ edoc_lib:escape_uri(Value)] ++ get_param_str2(T, true);
 get_param_str2([{Key, Value} | T], false) when is_list(Value) ->
     [Key ++ "=" ++ Value] ++ get_param_str2(T, false);
 get_param_str2([{_Key, undefined} | T], Escape) ->
@@ -416,6 +416,19 @@ get_nonce_test_() ->
      ?_assertEqual(32, length(get_nonce([])))
     ].
 
+get_param_str_test_() ->
+    Params = [{"t1", "foo/bar"},
+	      [],
+	      {"t2", "test"}
+	     ],
+
+    [
+     ?_assertEqual("t1=foo/bar&t2=test", get_param_str(Params, false)),
+     ?_assertEqual("t1=foo%2fbar&t2=test", get_param_str(Params, true)),
+     ?_assertEqual("t1=foo%2fbar&t2=test", get_param_str(Params ++ [{"t3", undefined}], true)),
+     ?_assertEqual("t1=foo%2fbar&t2=test", get_param_str(Params ++ [get_req_timeout([])], true))
+    ].
+
 get_request_url_test_() ->
     OTP = "abc123",
     Id  = "87",
@@ -426,7 +439,7 @@ get_request_url_test_() ->
     LogFun = yubico_log:fun_quiet(),
 
     [
-     ?_assertEqual("h=7BqT4wsQk1SNgYu1YwtDizl1ciM=&id=87&nonce=aabbccddeeff&otp=abc123",
+     ?_assertEqual("h=7BqT4wsQk1SNgYu1YwtDizl1ciM%3d&id=87&nonce=aabbccddeeff&otp=abc123",
 		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options1)
 		 ),
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
