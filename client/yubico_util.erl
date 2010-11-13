@@ -18,7 +18,8 @@
 %%--------------------------------------------------------------------
 -export([
 	 to_hex/1,
-	 get_sha1_hmac/3
+	 get_sha1_hmac/3,
+	 get_option/4
 	]).
 
 
@@ -60,6 +61,43 @@ get_sha1_hmac(Key, Data, LogFun) when is_binary(Key) ->
     Res = base64:encode_to_string(MAC),
     yubico_log:log(LogFun, debug, "Calculated SHA1 ~p from data ~p", [Res, Data]),
     Res.
+
+
+%%--------------------------------------------------------------------
+%% @doc     Get the HMAC-SHA1 signature of a piece of data.
+%%            Key    : yubico:apikey()
+%%            Data   : iolist()
+%%            LogFun : yubico_log:logfun()
+%%
+%%          Returns :
+%%
+%%            Base64 : string()
+%% @end
+%%--------------------------------------------------------------------
+-spec get_option(Key :: atom(),
+		 Type :: 'function' | 'list' | 'integer' | 'boolean' | 'atom' | 'any',
+		 Default :: any(),
+		 Options :: yubico:yubico_client_options()
+		) -> Value :: any().
+get_option(Key, Type, Default, Options) ->
+    case lists:keysearch(Key, 1, Options) of
+	{value, {Key, Value}} when Type == function, is_function(Value) ->
+	    Value;
+	{value, {Key, Value}} when Type == list, is_list(Value) ->
+	    Value;
+	{value, {Key, Value}} when Type == integer, is_integer(Value) ->
+	    Value;
+	{value, {Key, Value}} when Type == boolean, is_boolean(Value) ->
+	    Value;
+	{value, {Key, Value}} when Type == atom, is_atom(Value) ->
+	    Value;
+	{value, {Key, Value}} when Type == any ->
+	    Value;
+	{value, {Key, Value}} ->
+	    erlang:error({option_with_bad_type, Key, Value, Type});
+	false ->
+	    Default
+    end.
 
 %%====================================================================
 %% Internal functions

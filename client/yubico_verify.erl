@@ -298,21 +298,23 @@ get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options) ->
     HMAC = sign_request(UnescapedStr, APIkey, LogFun, SignRequest),
 
     %% The actual URI needs to be escaped
-    EscapedStr = get_param_str(Mandatory ++ Extra ++ HMAC, false),
+    EscapedStr = get_param_str(Mandatory ++ Extra ++ HMAC, true),
 
     lists:flatten(EscapedStr).
 
+-spec get_param_str([{Key :: string(), Value :: string() | 'undefined'}], Escape :: boolean()
+		   ) -> string().
 get_param_str(In, Escape) ->
     NoEmpty = [X || X <- In, X /= []],
     L1 = get_param_str2(NoEmpty, Escape),
     L2 = lists:sort(L1),	%% required for signing, good for consistency
     string:join(L2, "&").
 
-get_param_str2([{Key, Value} | T], true) ->
+get_param_str2([{Key, Value} | T], true) when is_list(Value) ->
     [Key ++ "=" ++ edoc_lib:escape_uri(Value)] ++ get_param_str2(T, false);
-get_param_str2([{Key, Value} | T], false) ->
+get_param_str2([{Key, Value} | T], false) when is_list(Value) ->
     [Key ++ "=" ++ Value] ++ get_param_str2(T, false);
-get_param_str2([undefined | T], Escape) ->
+get_param_str2([{_Key, undefined} | T], Escape) ->
     get_param_str2(T, Escape);
 get_param_str2([], _Escape) ->
     [].
@@ -321,7 +323,7 @@ get_param_str2([], _Escape) ->
 		   APIkey :: yubico:apikey(),
 		   LogFun :: yubico_log:logfun(),
 		   SignRequest :: boolean()
-		  ) -> string().
+		  ) -> [{H :: nonempty_string(), HMAC :: nonempty_string()}].
 sign_request(In, APIkey, LogFun, true) ->
     HMAC = yubico_util:get_sha1_hmac(APIkey, In, LogFun),
     [{"h", HMAC}];
@@ -332,91 +334,86 @@ sign_request(_In, _APIkey, _LogFun, false) ->
 -spec get_sign_request(Options :: yubico:yubico_client_options()
 		      ) -> boolean().
 get_sign_request(Options) ->
-    case lists:keysearch(sign_request, 1, Options) of
-	{value, {sign_request, Bool}} when is_boolean(Bool) ->
-	    Bool;
-	false ->
-	    %% Default is to sign the requests
-	    true
-    end.
-
+    %% Default is to sign the requests
+    Default = true,
+    yubico_util:get_option(sign_request, boolean, Default, Options).
 
 -spec get_nonce(Options :: yubico:yubico_client_options()
 	       ) -> string().
 get_nonce(Options) ->
-    case lists:keysearch(req_nonce, 1, Options) of
-	{value, {req_nonce, L}} when is_list(L) ->
-	    if
-		length(L) < 16 ->
-		    erlang:error(nonce_too_short);
-		length(L) > 40 ->
-		    erlang:error(nonce_too_long);
-		true ->
-		    lists:flatten(L)
-	    end;
-	false ->
-	    %% Default is to generate a nonce
-	    case crypto:start() of
-		ok ->
-		    ok;
-		{error, {already_started, crypto}} ->
-		    ok;
-		_ ->
-		    erlang:error(crypto_not_available)
-	    end,
-	    Random = crypto:rand_bytes(?DEFAULT_NONCE_BYTES),
-	    Hex = yubico_util:to_hex(binary_to_list(Random)),
-	    lists:flatten(Hex)
+    Nonce =
+	case yubico_util:get_option(req_nonce, list, undefined, Options) of
+	    undefined ->
+		%% Default is to generate a nonce
+		case crypto:start() of
+		    ok ->
+			ok;
+		    {error, {already_started, crypto}} ->
+			ok;
+		    _ ->
+			erlang:error(crypto_not_available)
+		end,
+		Random = crypto:rand_bytes(?DEFAULT_NONCE_BYTES),
+		Hex = yubico_util:to_hex(binary_to_list(Random)),
+		lists:flatten(Hex);
+	    L ->
+		lists:flatten(L)
+	end,
+    if
+	length(Nonce) < 16 ->
+	    erlang:error(nonce_too_short);
+	length(Nonce) > 40 ->
+	    erlang:error(nonce_too_long);
+	true ->
+	    Nonce
     end.
 
 -spec get_req_timestamp(Options :: yubico:yubico_client_options()
-		       ) -> {Key :: string(), Value :: string()} | undefined.
+		       ) -> {Key :: string(), Value :: string() | 'undefined'}.
 get_req_timestamp(Options) ->
-    case lists:keysearch(req_timestamp, 1, Options) of
-	{value, {req_timestamp, true}} ->
-	    {"timestamp", "1"};
-	false ->
-	    %% Default is to not request timestamp and session counter information
-	    %% in the response
-	    undefined
-    end.
+    %% Default is to not request timestamp and session counter information
+    %% in the response
+    Default = false,
+    {"timestamp",
+     case yubico_util:get_option(req_timestamp, boolean, Default, Options) of
+	 true -> "1";
+	 false -> undefined
+     end
+    }.
 
 -spec get_req_synclevel(Options :: yubico:yubico_client_options()
-		       ) -> {Key :: string(), Value :: string()} | undefined.
+		       ) -> {Key :: string(), Value :: string() | 'undefined'}.
 get_req_synclevel(Options) ->
-    case lists:keysearch(req_synclevel, 1, Options) of
-	{value, {req_synclevel, Int}} when is_integer(Int) ->
-	    {"sl", integer_to_list(Int)};
-	{value, {req_synclevel, 'fast'}} ->
-	    {"sl", "fast"};
-	{value, {req_synclevel, 'secure'}} ->
-	    {"sl", "secure"};
-	false ->
-	    %% Default is to let the server decice
-	    undefined
-    end.
+    %% Default is to let the server decice
+    Default = undefined,
+    {"sl",
+     case yubico_util:get_option(req_synclevel, any, Default, Options) of
+	 Int when is_integer(Int) ->
+	     integer_to_list(Int);
+	 'fast' -> "fast";
+	 'secure' -> "secure";
+	 Default -> Default
+     end
+    }.
 
 -spec get_req_timeout(Options :: yubico:yubico_client_options()
-		     ) -> {Key :: string(), Value :: string()} | undefined.
+		     ) -> {Key :: string(), Value :: string() | 'undefined'}.
 get_req_timeout(Options) ->
-    case lists:keysearch(req_timeout, 1, Options) of
-	{value, {req_timeout, Int}} when is_integer(Int) ->
-	    {"timeout", integer_to_list(Int)};
-	false ->
-	    %% Default is to let the server decide the sync responses timeout
-	    undefined
-    end.
+    %% Default is to let the server decide the sync responses timeout
+    Default = undefined,
+    {"timeout",
+     case yubico_util:get_option(req_timeout, integer, Default, Options) of
+	 Default -> Default;
+	 L -> integer_to_list(L)
+     end
+    }.
 
 -spec get_http_client(Options :: yubico:yubico_client_options()
 		     ) -> atom().
 get_http_client(Options) ->
-    case lists:keysearch(http_client, 1, Options) of
-	{value, {http_client, Module}} when is_atom(Module) ->
-	    Module;
-	false ->
-	    %% Default is the bundled module using Erlang/OTP inets http client
-	    yubico_http_client
-    end.
+    %% Default is the bundled module using Erlang/OTP inets http client
+    Default = yubico_http_client,
+    yubico_util:get_option(http_client, atom, Default, Options).
 
 
 %%====================================================================
@@ -432,7 +429,7 @@ get_options_test_() ->
     [
      ?_assert(get_http_client(Options) =:= 'yubico_test'),
      ?_assert(get_req_synclevel(Options) =:= {"sl", "fast"}),
-     ?_assert(get_req_timeout(Options) =:= undefined),
+     ?_assertEqual({"timeout", undefined}, get_req_timeout(Options)),
      ?_assert(get_sign_request(Options) =:= 'true'),
      ?_assert(get_sign_request([]) =:= 'true')
     ].
@@ -465,6 +462,21 @@ get_request_url_test_() ->
 		 ),
      ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123",
 		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2)
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&timestamp=1",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2 ++ [{req_timestamp, true}])
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&sl=fast",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2 ++ [{req_synclevel, 'fast'}])
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&sl=secure",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2 ++ [{req_synclevel, 'secure'}])
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&sl=90",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2 ++ [{req_synclevel, 90}])
+		 ),
+     ?_assertEqual("id=87&nonce=aabbccddeeff&otp=abc123&timeout=4711",
+		  get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options2 ++ [{req_timeout, 4711}])
 		 )
     ].
 

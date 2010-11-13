@@ -124,7 +124,7 @@
 		    Id :: nonempty_string(),
 		    APIkey :: apikey() | string(),
 		    Options :: yubico_client_options()
-		   ) -> {'auth', 'ok'} | {'bad_auth', yubico_verify:bad_auth_code()} | {'error', Reason :: any()}.
+		   ) -> {'auth', 'ok'} | {'bad_auth', yubico_response:bad_auth_code()} | {'error', Reason :: any()}.
 simple_verify(OTP, Id, APIkey, Options) when is_list(APIkey) ->
     %% string APIkey, assume base64 encoded
     NewAPIkey =
@@ -187,42 +187,26 @@ yubikey_id(OTP) when is_list(OTP) ->
 -spec get_logfun(Options :: yubico_client_options()
 		) -> yubico_log:logfun().
 get_logfun(Options) ->
-    case lists:keysearch(logfun, 1, Options) of
-	{value, {logfun, Fun}} when is_function(Fun) ->
-	    Fun;
-	false ->
-	    %% Default is to not log anything
-	    yubico_log:fun_quiet()
-    end.
+    %% Default is to not log anything
+    Default = yubico_log:fun_quiet(),
+    yubico_util:get_option(logfun, function, Default, Options).
 
 -spec get_verify_servers(Options :: yubico_client_options()
 			) -> [nonempty_string()].
 get_verify_servers(Options) ->
-    case lists:keysearch(verify_servers, 1, Options) of
-	{value, {verify_servers, L}} when is_list(L) ->
-	    L;
-	false ->
-	    %% Default is to query all public YubiCloud servers
-	    ?YUBICO_VERIFY_SERVERS
-    end.
+    %% Default is to query all public YubiCloud servers
+    Default = ?YUBICO_VERIFY_SERVERS,
+    yubico_util:get_option(verify_servers, list, Default, Options).
 
 -spec get_timeout(Options :: yubico_client_options()
 		 ) -> non_neg_integer().
 get_timeout(Options) ->
-    case lists:keysearch(timeout, 1, Options) of
-	{value, {timeout, Int}} when is_integer(Int) ->
-	    Int;
-	false ->
-	    ?DEFAULT_TIMEOUT
-    end.
+    Default = ?DEFAULT_TIMEOUT,
+    yubico_util:get_option(timeout, integer, Default, Options).
 
 -spec get_verify_wsurl(Options :: yubico_client_options()
-		      ) -> [nonempty_string()].
+		      ) -> nonempty_string().
 get_verify_wsurl(Options) ->
-    case lists:keysearch(verify_wsurl, 1, Options) of
-	{value, {verify_wsurl, L}} when is_list(L) ->
-	    L;
-	false ->
-	    %% Default is to query all public YubiCloud servers
-	    ?YUBICO_VERIFY_WSURL
-    end.
+    %% Default is to query all public YubiCloud servers
+    Default = ?YUBICO_VERIFY_WSURL,
+    yubico_util:get_option(verify_wsurl, list, Default, Options).
