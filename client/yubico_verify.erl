@@ -162,34 +162,35 @@ http(OTP, Id, APIkey, Servers, WSURL, Timeout, Options, LogFun)
 		 ) -> ok.
 master_init(Parent, Nonce, OTP, Id, APIkey, Scheme, Servers, WSURL, Timeout, Options, LogFun) ->
     Request = get_request_url(OTP, Id, APIkey, Nonce, LogFun, Options),
-
     HttpClientMod = get_http_client(Options),
 
-    Master = self(),
+    SchemeStr =
+	case Scheme of
+	    http  -> "http://";
+	    https -> "https://"
+	end,
 
-    %% Set up a timeout for this process
-    erlang:send_after(Timeout * 1000, self(), master_timeout),
+    StartWorker =
+	fun(Server) ->
+		URL = SchemeStr ++ Server ++ WSURL ++ Request,
 
-    Worker = fun(Server) ->
-		     spawn_link(fun() ->
-					worker_init(Master,
-						    HttpClientMod,
-						    Nonce,
-						    OTP,
-						    APIkey,
-						    Scheme,
-						    Server,
-						    WSURL,
-						    Request,
-						    Timeout,
-						    Options,
-						    LogFun)
-				end)
-	     end,
-    Workers = [Worker(Server) || Server <- Servers],
+		HttpClientMod:spawn_link_verify(Server,
+						URL,
+						Timeout,
+						OTP,
+						APIkey,
+						Nonce,
+						Options,
+						LogFun
+					       )
+	end,
+    Workers = [StartWorker(Server) || Server <- Servers],
 
     yubico_log:log(LogFun, debug, "I'm coordinating responses to caller ~p from ~p ~p workers :~n~p",
 		   [Parent, length(Workers), Scheme, Workers]),
+
+    %% Set up a timeout for this process
+    erlang:send_after(Timeout * 1000, self(), master_timeout),
 
     master_wait_for_responses(Parent, Workers, LogFun).
 
@@ -239,38 +240,6 @@ master_wait_for_responses(Parent, Workers, LogFun, BadResponses) ->
 	    master_wait_for_responses(Parent, NewWorkers, LogFun, [Response | BadResponses])
     end.
 
--spec worker_init(Master :: pid(),
-		  HttpClientMod :: atom(),
-		  Nonce :: nonempty_string(),
-		  OTP :: nonempty_string(),
-		  APIkey :: yubico:apikey(),
-		  Scheme :: yubico_client_scheme(),
-		  Server :: nonempty_string(),
-		  WSURL :: nonempty_string(),
-		  Request :: nonempty_string(),
-		  Timeout :: non_neg_integer(),
-		  Options :: yubico:yubico_client_options(),
-		  LogFun :: yubico_log:logfun()
-		 ) -> ok.
-worker_init(Master, HttpClientMod, Nonce, OTP, APIkey, Scheme, Server, WSURL, Request, Timeout, Options, LogFun) ->
-    SchemeStr =
-	case Scheme of
-	    http  -> "http://";
-	    https -> "https://"
-	end,
-
-    URL = SchemeStr ++ Server ++ WSURL ++ Request,
-
-    Res =
-	case HttpClientMod:verify(URL, Timeout, Options, LogFun) of
-	    {ok, Body} ->
-		yubico_response:check_verify_response(OTP, APIkey, Nonce, Body, Server, LogFun);
-	    {error, Reason} ->
-		{error, Reason}
-	end,
-    %% This workers job is done. Tell the master process what reponse we got and terminate.
-    Master ! {worker_response, self(), Res},
-    ok.
 
 -spec get_request_url(OTP :: nonempty_string(),
 		      Id :: nonempty_string(),

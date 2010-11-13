@@ -3,6 +3,17 @@
 %%% @author   Fredrik Thulin <fredrik@thulin.net>
 %%% @doc      Backend module to make HTTP querys to Yubico servers.
 %%%
+%%%           'verify' backend functions should export a
+%%%           spawn_link_verify/4 function that starts a worker
+%%%           process preforming the actual verification call. That
+%%%           process should report it's result with a message
+%%%
+%%%              {worker_response, self(), {ok, Dict :: dict()} |
+%%%                                        {error, Reason :: any()}
+%%%              }
+%%%
+%%%           to the process that invoked spawn_link_verify/4.
+%%%
 %%% @since    7 Nov 2010 by Fredrik Thulin <fredrik@thulin.net>
 %%% @end
 %%%
@@ -17,12 +28,67 @@
 %% External exports
 %%--------------------------------------------------------------------
 -export([
-	 verify/4
+	 spawn_link_verify/8
 	]).
 
 %%====================================================================
 %% External functions
 %%====================================================================
+
+%%--------------------------------------------------------------------
+%% @doc     Make a call to a 'verify' URL and return the response
+%%            In : string()
+%%
+%%          Returns :
+%%
+%%            {ok, ParsedBody :: dict()} any key=value pairs from the
+%%                                       HTTP response as a dict()
+%%            {error, Reason ::any()}
+%% @end
+%%--------------------------------------------------------------------
+-spec spawn_link_verify(Server :: nonempty_string(),
+			URL :: string(),
+			Timeout :: non_neg_integer(),
+			OTP :: nonempty_string(),
+			APIkey :: yubico:apikey(),
+			Nonce :: nonempty_string(),
+			Options :: yubico:yubico_client_options(),
+			LogFun :: yubico_log:logfun()
+		       ) -> pid().
+spawn_link_verify(Server, URL, Timeout, OTP, APIkey, Nonce, Options, LogFun)
+ when is_list(Server), is_list(URL), is_integer(Timeout), is_list(OTP), is_binary(APIkey), is_list(Nonce) ->
+    Master = self(),
+    spawn_link(fun() ->
+		       worker_init(Master, Server, URL, Timeout, OTP, APIkey, Nonce, Options, LogFun)
+	       end).
+
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
+
+-spec worker_init(Master :: pid(),
+		  Server :: nonempty_string(),
+		  URL :: nonempty_string(),
+		  Timeout :: non_neg_integer(),
+		  OTP :: nonempty_string(),
+		  APIkey :: yubico:apikey(),
+		  Nonce :: nonempty_string(),
+		  Options :: yubico:yubico_client_options(),
+		  LogFun :: yubico_log:logfun()
+		 ) -> ok.
+worker_init(Master, Server, URL, Timeout, OTP, APIkey, Nonce, Options, LogFun) ->
+    Res =
+	case verify(URL, Timeout, Options, LogFun) of
+	    {ok, Body} ->
+		yubico_response:check_verify_response(OTP, APIkey, Nonce, Body, Server, LogFun);
+	    {error, Reason} ->
+		{error, Reason}
+	end,
+
+    %% This workers job is done. Tell the master process what reponse we got and terminate.
+    Master ! {worker_response, self(), Res},
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc     Make a call to a 'verify' URL and return the response
@@ -58,10 +124,6 @@ verify(URL, Timeout, _Options, LogFun) when is_list(URL), is_integer(Timeout) ->
 	{error, Reason} ->
 	    {error, Reason}
     end.
-
-%%====================================================================
-%% Internal functions
-%%====================================================================
 
 -spec make_request(URL :: string(),
 		   Timeout :: non_neg_integer(),
