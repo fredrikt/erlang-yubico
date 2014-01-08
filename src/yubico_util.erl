@@ -57,7 +57,7 @@ to_hex(In) ->
 		    LogFun :: yubico_log:logfun()
 		   ) -> string().
 get_sha1_hmac(Key, Data, LogFun) when is_binary(Key) ->
-    MAC = crypto:sha_mac(Key, Data),
+    MAC = sha_mac(Key, Data),
     Res = base64:encode_to_string(MAC),
     yubico_log:log(LogFun, debug, "Calculated SHA1 ~p from data ~p", [Res, Data]),
     Res.
@@ -113,3 +113,11 @@ hex(N) when N < 10 ->
 hex(N) when N >= 10, N < 16 ->
     $a + (N - 10).
 
+
+-ifndef(old_hash).
+sha_mac(Key, Data) ->
+    crypto:sha_mac(Key, Data).
+-else.
+sha_mac(Key, Data) ->
+    crypto:hmac(sha, Key, Data).
+-endif.
