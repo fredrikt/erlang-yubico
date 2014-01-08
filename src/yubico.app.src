@@ -1,0 +1,12 @@
+{application, yubico,
+ [
+  {description, ""},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { yubico, []}},
+  {env, []}
+ ]}.
