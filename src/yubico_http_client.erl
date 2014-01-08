@@ -130,7 +130,7 @@ verify(URL, Timeout, _Options, LogFun) when is_list(URL), is_integer(Timeout) ->
 		   LogFun :: yubico_log:logfun()
 		  ) -> {'error',_} | {'ok', Body :: string()}.
 make_request(URL, Timeout, LogFun) ->
-    case http:request(get, {URL, []}, [{timeout, Timeout * 1000}], []) of
+    case httpc:request(get, {URL, []}, [{timeout, Timeout * 1000}], []) of
 	{ok, {{_HTTPVER, 200, Reason}, _Headers, Body}} ->
 	    yubico_log:log(LogFun, debug, "yubico_http_client:verify got response 200 ~s :~n~s", [Reason, Body]),
 	    {ok, Body};
@@ -138,7 +138,7 @@ make_request(URL, Timeout, LogFun) ->
 	    yubico_log:log(LogFun, debug, "yubico_http_client:verify got non-200 response :~n~p", [Response]),
 	    {error, unknown_response};
 	{error, Reason} ->
-	    yubico_log:log(LogFun, normal, "yubico_http_client:verify http:request/4 got error : ~p",
+	    yubico_log:log(LogFun, normal, "yubico_http_client:verify httpc:request/4 got error : ~p",
 			    [Reason]),
 	    {error, Reason}
     end.
