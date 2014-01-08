@@ -116,8 +116,8 @@ hex(N) when N >= 10, N < 16 ->
 
 -ifndef(old_hash).
 sha_mac(Key, Data) ->
-    crypto:sha_mac(Key, Data).
+    crypto:hmac(sha, Key, Data).
 -else.
 sha_mac(Key, Data) ->
-    crypto:hmac(sha, Key, Data).
+    crypto:sha_mac(Key, Data).
 -endif.
